@@ -43,8 +43,8 @@ while True:
         recv_menu()
         start = False
     command = input("> ")
-    send_msg(command)
     if command == 's':
+        send_msg(command)
         website = input("Website: ")
         send_msg(website)
 
@@ -56,21 +56,34 @@ while True:
 
         print("Saving password...")
     elif command == 'c':
+        send_msg(command)
         website = input("Website: ")
         password = input("New password: ")
         send_msg(website)
         send_msg(password)
         print(f"Successfuly changed password for {website}")
     elif command == 'g':
+        send_msg(command)
         website = input("Website: ")
         send_msg(website)
-        password = recv_msg()
-        print(f"Password for {website} : {password}")
+        success = int(recv_msg())
+        if not success:
+            print(recv_msg())
+        else:
+            username = recv_msg()
+            password = recv_msg()
+            print(f"Credentials for {website} :")
+            print(f"\tUsername: {username}")
+            print(f"\tPassword: {password}")
     elif command == 'd':
         website = input("Website: ")
-        send_msg(website)
-        print("Deleting...")
+        check = input(f"Are you sure you want to delete the password for {website}? (y/n) ")
+        if check.lower() == 'y':
+            send_msg(command)
+            send_msg(website)
+            print("Deleting...")
     elif command == 'q':
+        send_msg(command)
         print("Quitting...")
         break
 
