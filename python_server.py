@@ -3,10 +3,6 @@ import sqlite3
 
 print("Initializing server...")
 
-WEBSITE = 0
-USR = 1
-PASSWD = 2
-
 HEADER_SIZE = 10
 
 db = sqlite3.connect("passwords.db")
@@ -86,9 +82,12 @@ def change_pass(website, passwd):
 
 def get_pass(website):
 
-    c.execute(f"SELECT passwd FROM passwords WHERE website='{website}'")
-
-    return c.fetchall()[0][0]
+    c.execute(f"SELECT usr, passwd FROM passwords WHERE website='{website}'")
+    try:
+        ret = c.fetchall()[0]
+        return ret[0], ret[1]
+    except:
+        return 0, 0
 
 def generate_pass():
     pass
@@ -110,15 +109,25 @@ while True:
     command = client_socket.recv(1).decode("utf-8")
     if command == 's':
         website = recv_msg()
-        usr = recv_msg()
+        usr = recv_msg().lower()
         passwd = recv_msg()
         save_pass(website, usr, passwd)
         print(f"Saved new password for website: {website}.")
     elif command == 'g':
         website = recv_msg()
-        pas = get_pass(website)
-        print(f"Getting password for website: {website}.")
-        send_msg(pas)
+        usr, pas = get_pass(website)
+        if not usr:
+            print("User asked for nonexisting password.")
+            error = "0"
+            send_msg(error)
+            msg = "The password you are asking for does not exist, try again."
+            send_msg(msg)
+        else:
+            error = "1"
+            send_msg(error)
+            print(f"Getting password for website: {website}.")
+            send_msg(usr)
+            send_msg(pas)
     elif command == 'c':
         website = recv_msg()
         passwd = recv_msg()
@@ -129,26 +138,10 @@ while True:
         print(f"Deleting password for website: {website}.")
         delete_pass(website)
     elif command == 'q':
-        print("Client disconnecting...")
+        print("Client disconnecting, ready for new connection.")
         client_socket.close()
         client_socket = False
 
 c.close()
 db.close()
 client_socket.close()
-
-#########################
-#                       #
-# DOBRO DOSAO NA SERVER #
-#                       #
-#########################
-#                       #
-# IZABERI USLUGU:       #
-# >SACUVAJ NOVU SIFRU[s]#
-# >OCITAJ POSTOJECU[g]  #
-# >PROMENI POSTOJECU[c] #
-# >OBRISI SIFRU[d]      #
-# >GENERISI SIFRU[g]    #
-#                       #
-#########################
-# >
