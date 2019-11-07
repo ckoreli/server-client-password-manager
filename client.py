@@ -1,4 +1,6 @@
 import socket
+import random
+import sys
 
 HEADER_SIZE = 10
 
@@ -18,29 +20,39 @@ unicorn = ["              ,,))))))));,",
            "       //  | |                        / ;   \;;,\\",
            "      (<_  | ;                      /',/-----'  _>",
            "       \_| ||_                     //~;~~~~~~~~~",
-           "           `\_|                   (,~~",
+           "           `\_|                   (,~~  -Tua Xiong",
            "                                   \~\\",
            "                                    ~~"]
 
 for line in unicorn:
     print(line)
 
-print("Password manager, version 2.0\nType 'help' for full list of builtin commands and their descriptions.")
+print("Password manager, version 2.3\nType 'help' for full list of builtin commands and their descriptions.")
 
-commands = {"get" : {"arguments" : 1}, 
+characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*(){}[]:|/,.<>;=+_-~'
+
+commands = {"login" : {"arguments" : 2},
+            "logout" : {"arguments" : 0},
+            "register" : {"arguments" : 3},
+            "get" : {"arguments" : 1}, 
             "set" : {"arguments" : 2}, 
             "save" : {"arguments" : 3}, 
             "delete" : {"arguments" : 1}, 
             "quit" : {"arguments" : 0}, 
-            "generate" : {"arguments" : 0},
-            "help" : {"arguments": 1}}
+            "generate" : {"arguments" : 1},
+            "help" : {"arguments" : 1},
+            "whoami" : {"arguments" : 0}}
 
 help_ = {"header" : "Password manager, version 2.0\nThese commands are defined internally. Type 'help name' to find out more about command 'name'.\n",
+         "login" : "\tlogin: login [USERNAME] [PASSWORD]  -  Log in to service as USERNAME.\n",
+         "logout" : "\tlogout: logout  -  Log out.\n",
+         "register" : "\tregister : register [USERNAME] [PASSWORD] [REFERAL CODE]  -  Register new user to service.\n",
+         "whoami" : "\twhoami: whoami  -  Prints username of currently logged in account.\n",
          "get" : "\tget: get [WEBSITE]  -  Get saved password for WEBSITE.\n",
          "set" : "\tset: set [WEBSITE]  -  Set new password for WEBSITE.\n",
          "save" : "\tsave: save [WEBSITE] [USERNAME] [PASSWORD]  -  Save PASSWORD for WEBSITE with USERNAME into database.\n",
          "delete" : "\tdelete: delete [WEBSITE]  -  Delete saved password for WEBSITE.\n", 
-         "generate" : "\tgenerate: generate  -  Generates a relatively safe, random password.\n",
+         "generate" : "\tgenerate: generate [LENGTH]  -  Generates a relatively safe, random password.\n",
          "help" : "\thelp: help [COMMAND]  -  Display information about builtin COMMAND. Leave blank for full list of builtin commands.\n",
          "quit" : "\tquit: quit  -  Finish current session.\n"}
 
@@ -51,9 +63,16 @@ port = 1337
 
 client_socket.connect((host, port))
 
+logged_in = False
+logged_as = ""
 
-def generate():
-    pass
+
+def generate(length):
+    random_pass = ""
+    for i in range(length):
+        random_pass += random.choice(characters)
+
+    print(random_pass)
 
 
 def check(command):
@@ -74,10 +93,13 @@ def check(command):
 
 
 def send_msg(msg):
-    
-    msg = f"{len(msg) :< {HEADER_SIZE}}" + msg
+    try:
+        msg = f"{len(msg) :< {HEADER_SIZE}}" + msg
 
-    client_socket.send(msg.encode("utf-8"))
+        client_socket.send(msg.encode("utf-8"))
+    except:
+        print("Server disconnected.")
+        sys.exit()
 
 
 def send_command(command):
@@ -113,9 +135,65 @@ while True:
             print(help_.get(command[1]))
     
     else:
-        send_command(command)
+        if command[0] == "whoami":
+            if logged_in:
+                print(f"Currently logged in as '{logged_as}'")
+            else:
+                print("You are not logged in.")
+            continue
 
-        if command[0] == "get":
+        elif command[0] == "quit":
+            print("Disconnecting.")
+            break
+
+        if not logged_in and (command[0] != "login" and command[0] != "register"):
+            print("You need to be logged in in order to use the service.")
+            continue
+
+        elif command[0] == "login":
+            if logged_in:
+                print("You are already logged in.")
+            
+            else:
+                send_command(command)
+                username = command[1]
+                success = int(recv_msg())
+
+                if not success:
+                    print("Incorrect username or password.")
+                
+                else:
+                    print(f"Successfuly logged in as '{username}'.")
+                    logged_in = True
+                    logged_as = username
+
+        elif command[0] == "register":
+            if logged_in:
+                print("Log out before registering a new account.")
+
+            else:
+                send_command(command)
+                success = int(recv_msg())
+
+                if not success:
+                    print("Incorrect referal key, contact server administrator if you wish to register an account.")
+                
+                else:
+                    success = int(recv_msg())
+                    if success:
+                        print("Successfuly registered new account.")
+                        logged_in = True
+                        logged_as = command[1]
+                    else:
+                        print(f"Account '{command[1]}' is already registered.")
+
+        elif command[0] == "logout":
+            send_command(command)
+            logged_in = False
+            logged_as = ""
+        
+        elif command[0] == "get":
+            send_command(command)
             error = recv_msg()
             if int(error):
                 print(f"Error: Asking for nonexisting password.")
@@ -129,22 +207,22 @@ while True:
 
 
         elif command[0] == "set":
-            print(f"Changing password for '{command[1]}'.")
+            send_command(command)
+            success = int(recv_msg())
+            if success:
+                print(f"Changing password for '{command[1]}'.")
+            else:
+                print("Error: Trying to change nonexisting password.")
 
         elif command[0] == "save":
+            send_command(command)
             print(f"Saving new password for '{command[1]}'.")
         
         elif command[0] == "delete":
+            send_command(command)
             print(f"Deleting password for '{command[1]}'.")
         
         elif command[0] == "generate":
-            pass
-        
-        elif command[0] == "quit":
-            print("Disconnecting.")
-            break
-
-
-
+            generate(int(command[1]))
 
 client_socket.close()
