@@ -1,90 +1,150 @@
 import socket
 
 HEADER_SIZE = 10
-WELCOME_WIDTH = 26
+
+unicorn = ["              ,,))))))));,",
+           "           __)))))))))))))),",
+           "\|/       -\(((((''''((((((((.",
+           "-*-==//////((''  .     `)))))),",
+           "/|\      ))| o    ;-.    '(((((                                  ,(,",
+           "         ( `|    /  )    ;))))'                               ,_))^;(~",
+           "            |   |   |   ,))((((_     _____------~~~-.        %,;(;(>';'~",
+           "            o_);   ;    )))(((` ~---~  `::           \      %%~~)(v;(`('~",
+           "                  ;    ''''````         `:       `:::|\,__,%%    );`'; ~",
+           "                 |   _                )     /      `:|`----'     `-'",
+           "           ______/\/~    |                 /        /",
+           "         /~;;.____/;;'  /          ___--,-(   `;;;/",
+           "        / //  _;______;'------~~~~~    /;;/\    /",
+           "       //  | |                        / ;   \;;,\\",
+           "      (<_  | ;                      /',/-----'  _>",
+           "       \_| ||_                     //~;~~~~~~~~~",
+           "           `\_|                   (,~~",
+           "                                   \~\\",
+           "                                    ~~"]
+
+for line in unicorn:
+    print(line)
+
+print("Password manager, version 2.0\nType 'help' for full list of builtin commands and their descriptions.")
+
+commands = {"get" : {"arguments" : 1}, 
+            "set" : {"arguments" : 2}, 
+            "save" : {"arguments" : 3}, 
+            "delete" : {"arguments" : 1}, 
+            "quit" : {"arguments" : 0}, 
+            "generate" : {"arguments" : 0},
+            "help" : {"arguments": 1}}
+
+help_ = {"header" : "Password manager, version 2.0\nThese commands are defined internally. Type 'help name' to find out more about command 'name'.\n",
+         "get" : "\tget: get [WEBSITE]  -  Get saved password for WEBSITE.\n",
+         "set" : "\tset: set [WEBSITE]  -  Set new password for WEBSITE.\n",
+         "save" : "\tsave: save [WEBSITE] [USERNAME] [PASSWORD]  -  Save PASSWORD for WEBSITE with USERNAME into database.\n",
+         "delete" : "\tdelete: delete [WEBSITE]  -  Delete saved password for WEBSITE.\n", 
+         "generate" : "\tgenerate: generate  -  Generates a relatively safe, random password.\n",
+         "help" : "\thelp: help [COMMAND]  -  Display information about builtin COMMAND. Leave blank for full list of builtin commands.\n",
+         "quit" : "\tquit: quit  -  Finish current session.\n"}
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 host = "192.168.0.33"
-port = 1234
+port = 1337
 
 client_socket.connect((host, port))
 
-start = True
+
+def generate():
+    pass
+
+
+def check(command):
+    if command[0] not in commands:
+        print(f"Command '{command[0]}' not found. Try 'help' for full list of builtin commands.")
+        return False
+
+    if command[0] == 'help':
+        if len(command) > 2:
+            print("Invalid syntax for command 'help'. Try: 'help help'.")
+            return False
+    
+    elif len(command) - 1 != commands[command[0]]["arguments"]:
+        print(f"Invalid syntax for command '{command[0]}'. Try: 'help {command[0]}'")
+        return False
+    
+    return True
+
+
+def send_msg(msg):
+    
+    msg = f"{len(msg) :< {HEADER_SIZE}}" + msg
+
+    client_socket.send(msg.encode("utf-8"))
+
+
+def send_command(command):
+
+    for word in command:
+        send_msg(word)
 
 
 def recv_msg():
-    # print("Receiving message")
-    msg_size = int(client_socket.recv(HEADER_SIZE).decode("utf-8"))
-    # print(f"Message size = {msg_size}")
-    msg = client_socket.recv(msg_size).decode("utf-8")
-    # print("Message = " + msg)
-    return msg
+    try:
+        msg_len = client_socket.recv(HEADER_SIZE)
 
-def send_msg(msg):
-    header = f"{len(msg) :< {HEADER_SIZE}}"
-    client_socket.send(header.encode("utf-8"))
-    client_socket.send(msg.encode("utf-8"))
+        if not len(msg_len):
+            return False
 
-def recv_welcome():
-    for i in range(4):
-        line = client_socket.recv(WELCOME_WIDTH).decode("utf-8")
-        print(line)
+        msg_len = int(msg_len.decode("utf-8"))
 
-def recv_menu():
-    for i in range(10):
-        line = client_socket.recv(WELCOME_WIDTH).decode("utf-8")
-        print(line)
+        return client_socket.recv(msg_len).decode("utf-8")
+    except:
+        return False
 
 
 while True:
-    if start:
-        recv_welcome()
-        recv_menu()
-        start = False
-    command = input("> ")
-    if command == 's':
-        send_msg(command)
-        website = input("Website: ")
-        send_msg(website)
-
-        username = input("Username: ")
-        send_msg(username)
-        
-        password = input("Password: ")
-        send_msg(password)
-
-        print("Saving password...")
-    elif command == 'c':
-        send_msg(command)
-        website = input("Website: ")
-        password = input("New password: ")
-        send_msg(website)
-        send_msg(password)
-        print(f"Successfuly changed password for {website}")
-    elif command == 'g':
-        send_msg(command)
-        website = input("Website: ")
-        send_msg(website)
-        success = int(recv_msg())
-        if not success:
-            print(recv_msg())
+    command = input("# ").split()
+    if not check(command):
+        continue
+    if command[0] == 'help':
+        if len(command) == 1:
+            for key, value in help_.items():
+                print(value)
         else:
-            username = recv_msg()
-            password = recv_msg()
-            print(f"Credentials for {website} :")
-            print(f"\tUsername: {username}")
-            print(f"\tPassword: {password}")
-    elif command == 'd':
-        website = input("Website: ")
-        check = input(f"Are you sure you want to delete the password for {website}? (y/n) ")
-        if check.lower() == 'y':
-            send_msg(command)
-            send_msg(website)
-            print("Deleting...")
-    elif command == 'q':
-        send_msg(command)
-        print("Quitting...")
-        break
+            print()
+            print(help_.get(command[1]))
+    
+    else:
+        send_command(command)
+
+        if command[0] == "get":
+            error = recv_msg()
+            if int(error):
+                print(f"Error: Asking for nonexisting password.")
+
+            else:
+                print(f"Credentials for '{command[1]}':")
+                username = recv_msg()
+                password = recv_msg()
+
+                print(f"\tUsername: {username}\n\tPassword: {password}") 
+
+
+        elif command[0] == "set":
+            print(f"Changing password for '{command[1]}'.")
+
+        elif command[0] == "save":
+            print(f"Saving new password for '{command[1]}'.")
+        
+        elif command[0] == "delete":
+            print(f"Deleting password for '{command[1]}'.")
+        
+        elif command[0] == "generate":
+            pass
+        
+        elif command[0] == "quit":
+            print("Disconnecting.")
+            break
+
+
+
 
 client_socket.close()
