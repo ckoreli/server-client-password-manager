@@ -7,6 +7,8 @@ HEADER_SIZE = 10
 db = sqlite3.connect("passwords.db")
 c  = db.cursor()
 
+c.execute("CREATE TABLE IF NOT EXISTS passwords(website TEXT, usr TEXT, passwd TEXT)")
+
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 host = "192.168.0.33"
