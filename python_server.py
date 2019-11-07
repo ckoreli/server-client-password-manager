@@ -1,78 +1,52 @@
 import socket
+import select
 import sqlite3
-
-print("Initializing server...")
 
 HEADER_SIZE = 10
 
 db = sqlite3.connect("passwords.db")
-c = db.cursor()
+c  = db.cursor()
 
-c.execute("CREATE TABLE IF NOT EXISTS passwords(website TEXT, usr TEXT, passwd TEXT)")
-
-# Napravi novi socket object koji interaguje preko IP (socket.AF_INET) pomocu TCP protokola (socket.SOCK_STREAM)
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# Set socket option da port koji odredim bude reusable
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-#                             GDE                  STA          NA
+
 host = "192.168.0.33"
-port = 1234
-# Bindujem host i port na kojem treba da slusa za socket
-server_socket.bind((host, port));
-# Cekam neku konekciju (max 5)
-server_socket.listen(5);
-client_socket = False
+port = 1337
+
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+server_socket.bind((host, port))
+
+server_socket.listen(5)
 
 
-def recv_msg():
-    print("Receiving message")
-    msg_size = int(client_socket.recv(HEADER_SIZE).decode("utf-8"))
-    print(f"Message size = {msg_size}")
-    msg = client_socket.recv(msg_size).decode("utf-8")
-    print("Message = " + msg)
-    return msg
+def recv_msg(client_socket):
+    try:
+        msg_len = client_socket.recv(HEADER_SIZE)
 
-def send_msg(msg):
-    header = f"{len(msg) :< {HEADER_SIZE}}"
-    # print("Message = " + msg)
-    client_socket.send(header.encode("utf-8"))
-    client_socket.send(msg.encode("utf-8"))
+        if not len(msg_len):
+            return False
 
-def print_welcome():
-    welcome_msg = ["##########################",
-                   "#                        #",
-                   "# Welcome to the server. #",
-                   "#                        #"]
-    for line in welcome_msg:
-        # print(line)
-        client_socket.send(line.encode("utf-8"))
-        # sleep(1)
+        msg_len = int(msg_len.decode("utf-8"))
 
-def print_menu():
-    menu = ["##########################",
-            "#                        #",
-            "# Get password......[g]  #",
-            "# Save password.....[s]  #",
-            "# Change password...[c]  #",
-            "# Delete password...[d]  #",
-            "# Generate password.[g]  #",
-            "# Quit..............[q]  #",
-            "#                        #",
-            "##########################"]
-    for line in menu:
-        # print(line);
-        client_socket.send(line.encode("utf-8"))
-        # sleep(1)
+        return client_socket.recv(msg_len).decode("utf-8")
+    except:
+        return False
+
+
+def send_msg(client_socket, msg):
+
+    msg = f"{len(msg) :< {HEADER_SIZE}}" + msg
+
+    client_socket.send(msg.encode("utf-8"))    
+
 
 def save_pass(website, usr, passwd):
-    print(passwd)
 
     c.execute("INSERT INTO passwords(website, usr, passwd) VALUES(?, ?, ?)", (website, usr, passwd))
     db.commit()
 
     print("Password successfuly saved.")
 
-def change_pass(website, passwd):
+def set_pass(website, passwd):
 
     c.execute(f"SELECT passwd FROM passwords WHERE website = '{website}'")
     old_passwd = c.fetchall()[0][0]
@@ -89,59 +63,67 @@ def get_pass(website):
     except:
         return 0, 0
 
-def generate_pass():
-    pass
-
 def delete_pass(website):
 
     c.execute(f"DELETE FROM passwords WHERE website = '{website}'")
     db.commit()
 
-print("Server successfuly initialized. Listening...")
+
+socket_list = [server_socket]
+clients = {}
 
 while True:
-    if not client_socket:
-        client_socket, address = server_socket.accept()
-        print(f"{address} has connected.")
-        print_welcome()
-        print_menu()
-    
-    command = client_socket.recv(1).decode("utf-8")
-    if command == 's':
-        website = recv_msg()
-        usr = recv_msg().lower()
-        passwd = recv_msg()
-        save_pass(website, usr, passwd)
-        print(f"Saved new password for website: {website}.")
-    elif command == 'g':
-        website = recv_msg()
-        usr, pas = get_pass(website)
-        if not usr:
-            print("User asked for nonexisting password.")
-            error = "0"
-            send_msg(error)
-            msg = "The password you are asking for does not exist, try again."
-            send_msg(msg)
-        else:
-            error = "1"
-            send_msg(error)
-            print(f"Getting password for website: {website}.")
-            send_msg(usr)
-            send_msg(pas)
-    elif command == 'c':
-        website = recv_msg()
-        passwd = recv_msg()
-        print(f"Changing password for website: {website}.")
-        change_pass(website, passwd)
-    elif command == 'd':
-        website = recv_msg()
-        print(f"Deleting password for website: {website}.")
-        delete_pass(website)
-    elif command == 'q':
-        print("Client disconnecting, ready for new connection.")
-        client_socket.close()
-        client_socket = False
+    read_sockets, _, exception_sockets = select.select(socket_list, [], socket_list)
+    for notified in read_sockets:
+        if notified == server_socket:
+            client_socket, client_address = server_socket.accept()
 
-c.close()
-db.close()
-client_socket.close()
+            socket_list.append(client_socket)
+
+            print(f"Received connection from {client_address}")
+
+        else:
+            command = recv_msg(notified)
+
+            if command is False:
+                socket_list.remove(notified)
+                print("Client disconnected.")
+                continue
+            
+            print(f"Executing {command} command.")
+
+            if command == "set":
+                website = recv_msg(notified)
+                password = recv_msg(notified)
+
+                set_pass(website, password)
+
+            elif command == "save":
+                website = recv_msg(notified)
+                username = recv_msg(notified)
+                password = recv_msg(notified)
+
+                save_pass(website, username, password)
+
+            elif command == "delete":
+                website = recv_msg(notified)
+                
+                delete_pass(website)
+
+            elif command == "get":
+                website = recv_msg(notified)
+
+                username, password = get_pass(website)
+
+                error = "0"
+
+                if not username:
+                    error = "1"
+                    send_msg(notified, error)
+                    print("Error: User asked for nonexisting password.")
+                    continue
+
+                send_msg(notified, error)
+                send_msg(notified, username)
+                send_msg(notified, password)
+
